@@ -12,7 +12,7 @@ data1 = pd.read_excel('Addresses.xlsx', sheet_name='Sheet1')
 lot = np.array([1, 2, 4, 6, 13, 14, 16, 17, 18, 22, 23, 27, 32, 36, 39, 40, 41, 42, 43, 44, 45], dtype=int)
 File = f'Receipt_{current_time}.xlsx' 
 
-original_file = 'C:/project1/template.xlsx'
+original_file = 'template.xlsx'
 copy_file = f"C:/project1/{File}" 
 
 shutil.copy(original_file, copy_file)
@@ -20,10 +20,21 @@ shutil.copy(original_file, copy_file)
 file_path = f"C:/project1/{File}" 
 wb = xw.Book(file_path)
 
+last_number = 1000
 def normalize_text(text):
     if isinstance(text, str):
         return text.strip().lower() 
     return text
+
+def fittext(cell):
+    max_width = cell.column_width * 7.5
+    while cell.api.Font.Size > 8:
+        text_width = len(str(cell.value)) * cell.api.Font.Size * 0.6
+        if text_width <= max_width:
+            break
+        cell.api.Font.Size -=1
+        
+        
 
 for i in range(len(data1)):  
     original_region = str(data1.loc[i, 'Region']).strip()
@@ -78,21 +89,39 @@ for i in range(len(data1)):
             source_sheet = wb.sheets["Sheet1"] 
             source_sheet.api.Copy(After=wb.sheets[-1].api)
 
-            new_sheet = wb.sheets[-1]
             sheet_name = f"{original_region}_{original_division}_{lot_no}"[:30]
             counter = 1
+            
+            new_sheet = wb.sheets[-1]
             while sheet_name in [sh.name for sh in wb.sheets]:
                 truncated_base = sheet_name[:27]
                 sheet_name = f"{truncated_base}_{counter}"
                 counter += 1
 
+            last_number+=1
+            new_invoice = f"2025-03-{last_number:04}"
+
+            new_sheet.range("D7").value = new_invoice
             new_sheet.name = sheet_name
             new_sheet.range("B15").options(transpose=True).value = data3.iloc[:, 0].tolist() 
             new_sheet.range("C15").options(transpose=True).value = data3.iloc[:, 1].tolist()
             new_sheet.range("B14").value = "Lot No. " + str(Selected_data.loc[k]['LOT NO._Unnamed: 1_level_1']) + " " + Selected_data.loc[k]['QUALIFICATION TITLE/PROGRAM_Unnamed: 2_level_1']
             new_sheet.range("B8").value = f"TESDA {original_region} - {original_division}"
             new_sheet.range("B9").value = address
+            new_sheet.range("C15").options(transpose=True).value = data3.iloc[:, 1].tolist()
 
+            start_row = 15
+            while new_sheet.range(f"B{start_row}").value:  
+                start_row += 1  
+                
+            for idx in range(15, start_row):
+                new_sheet.range(f"A{idx}").value = Selected_data.loc[k][counting]  
+
+            first_value = new_sheet.range("A15").value
+            for idx in range(16, start_row):
+                if new_sheet.range(f"B{idx}").value:
+                    new_sheet.range(f"A{idx}").value = first_value
+                    
             # Adjust font size in merged B9:D9
             cell_b9 = new_sheet.range("B9")
             merge_width = cell_b9.merge_area.width
@@ -103,11 +132,17 @@ for i in range(len(data1)):
                 cell_b9.api.Font.Size = font_size
                 text_length = len(str(cell_b9.value)) * 6
 
-            for row in range(14, 30):
-                cell = new_sheet.range(f"B{row}")
-                while cell.column_width < len(str(cell.value)) * 0.8 and cell.api.Font.Size > 8:
-                    cell.api.Font.Size -= 1
+            
+            fittext(new_sheet.range("B14"))
 
+            quantities = (Selected_data.loc[k][counting] * data3.iloc[:, 1]).tolist() 
+            total = sum(quantities)
+            new_sheet.range("D15").options(transpose=True).value = quantities
+            new_sheet.range("D29").value = total
+
+            new_sheet.range("C:C").number_format = "#,##0.00"
+            new_sheet.range("D:D").number_format = "#,##0.00"
+            
             wb.app.calculate()
             print("✅ Sheet updated successfully with formatted text!")
 
